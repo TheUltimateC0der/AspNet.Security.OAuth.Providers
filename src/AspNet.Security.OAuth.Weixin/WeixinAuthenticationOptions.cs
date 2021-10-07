@@ -4,11 +4,10 @@
  * for more information concerning the license and the contributors participating to this project.
  */
 
+using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json.Linq;
 using static AspNet.Security.OAuth.Weixin.WeixinAuthenticationConstants;
 
 namespace AspNet.Security.OAuth.Weixin
@@ -21,7 +20,7 @@ namespace AspNet.Security.OAuth.Weixin
         public WeixinAuthenticationOptions()
         {
             ClaimsIssuer = WeixinAuthenticationDefaults.Issuer;
-            CallbackPath = new PathString(WeixinAuthenticationDefaults.CallbackPath);
+            CallbackPath = WeixinAuthenticationDefaults.CallbackPath;
 
             AuthorizationEndpoint = WeixinAuthenticationDefaults.AuthorizationEndpoint;
             TokenEndpoint = WeixinAuthenticationDefaults.TokenEndpoint;
@@ -40,13 +39,12 @@ namespace AspNet.Security.OAuth.Weixin
             ClaimActions.MapJsonKey(Claims.HeadImgUrl, "headimgurl");
             ClaimActions.MapCustomJson(Claims.Privilege, user =>
             {
-                var value = user.Value<JArray>("privilege");
-                if (value == null)
+                if (!user.TryGetProperty("privilege", out var value) || value.ValueKind != System.Text.Json.JsonValueKind.Array)
                 {
                     return null;
                 }
 
-                return string.Join(",", value.ToObject<string[]>());
+                return string.Join(',', value.EnumerateArray().Select(element => element.GetString()));
             });
         }
     }

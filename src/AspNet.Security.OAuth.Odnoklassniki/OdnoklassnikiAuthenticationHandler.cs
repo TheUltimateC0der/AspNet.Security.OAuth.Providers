@@ -4,14 +4,15 @@
  * for more information concerning the license and the contributors participating to this project.
  */
 
+using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.AspNetCore.Authentication;
@@ -19,7 +20,6 @@ using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Linq;
 
 namespace AspNet.Security.OAuth.Odnoklassniki
 {
@@ -34,58 +34,58 @@ namespace AspNet.Security.OAuth.Odnoklassniki
         {
         }
 
-        protected override async Task<AuthenticationTicket> CreateTicketAsync([NotNull] ClaimsIdentity identity,
-            [NotNull] AuthenticationProperties properties, [NotNull] OAuthTokenResponse tokens)
+        protected override async Task<AuthenticationTicket> CreateTicketAsync(
+            [NotNull] ClaimsIdentity identity,
+            [NotNull] AuthenticationProperties properties,
+            [NotNull] OAuthTokenResponse tokens)
         {
-            string sign;
-            using (var algorithm = MD5.Create())
-            {
-                var accessSecret = GetHash(algorithm, tokens.AccessToken + Options.ClientSecret);
-                sign = GetHash(algorithm, $"application_key={Options.PublicSecret}format=jsonmethod=users.getCurrentUser{accessSecret}");
-            }
+            string accessSecret = GetMD5Hash(tokens.AccessToken + Options.ClientSecret);
+            string sign = GetMD5Hash($"application_key={Options.PublicSecret}format=jsonmethod=users.getCurrentUser{accessSecret}");
 
-            var address = QueryHelpers.AddQueryString(Options.UserInformationEndpoint, new Dictionary<string, string>
+            string address = QueryHelpers.AddQueryString(Options.UserInformationEndpoint, new Dictionary<string, string?>
             {
-                ["application_key"] = Options.PublicSecret,
+                ["application_key"] = Options.PublicSecret ?? string.Empty,
                 ["format"] = "json",
                 ["method"] = "users.getCurrentUser",
                 ["sig"] = sign,
-                ["access_token"] = tokens.AccessToken
+                ["access_token"] = tokens.AccessToken,
             });
 
-            var request = new HttpRequestMessage(HttpMethod.Get, address);
+            using var request = new HttpRequestMessage(HttpMethod.Get, address);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            var response = await Backchannel.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, Context.RequestAborted);
+            using var response = await Backchannel.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, Context.RequestAborted);
             if (!response.IsSuccessStatusCode)
             {
                 Logger.LogError("An error occurred while retrieving the user profile: the remote server " +
                                 "returned a {Status} response with the following payload: {Headers} {Body}.",
                                 /* Status: */ response.StatusCode,
                                 /* Headers: */ response.Headers.ToString(),
-                                /* Body: */ await response.Content.ReadAsStringAsync());
+                                /* Body: */ await response.Content.ReadAsStringAsync(Context.RequestAborted));
 
                 throw new HttpRequestException("An error occurred while retrieving the user profile.");
             }
 
-            var payload = JObject.Parse(await response.Content.ReadAsStringAsync());
+            using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Context.RequestAborted));
 
             var principal = new ClaimsPrincipal(identity);
-            var context = new OAuthCreatingTicketContext(principal, properties, Context, Scheme, Options, Backchannel, tokens, payload);
-            context.RunClaimActions(payload);
+            var context = new OAuthCreatingTicketContext(principal, properties, Context, Scheme, Options, Backchannel, tokens, payload.RootElement);
+            context.RunClaimActions();
 
-            await Options.Events.CreatingTicket(context);
-            return new AuthenticationTicket(context.Principal, context.Properties, Scheme.Name);
+            await Events.CreatingTicket(context);
+            return new AuthenticationTicket(context.Principal!, context.Properties, Scheme.Name);
         }
 
-        private static string GetHash(HashAlgorithm algorithm, string input)
+        protected override string FormatScope([NotNull] IEnumerable<string> scopes)
+            => string.Join(';', scopes);
+
+        private static string GetMD5Hash(string input)
         {
-            var builder = new StringBuilder();
-            foreach (var b in algorithm.ComputeHash(Encoding.UTF8.GetBytes(input)))
-            {
-                builder.Append(b.ToString("x2", CultureInfo.InvariantCulture));
-            }
-            return builder.ToString();
+#pragma warning disable CA5351
+            byte[] hash = MD5.HashData(Encoding.UTF8.GetBytes(input));
+#pragma warning restore CA5351
+
+            return Convert.ToHexString(hash).ToLowerInvariant();
         }
     }
 }

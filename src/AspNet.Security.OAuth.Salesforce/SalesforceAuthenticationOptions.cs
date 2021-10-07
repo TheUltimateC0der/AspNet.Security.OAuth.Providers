@@ -8,7 +8,6 @@ using System;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
 using static AspNet.Security.OAuth.Salesforce.SalesforceAuthenticationConstants;
 
 namespace AspNet.Security.OAuth.Salesforce
@@ -22,7 +21,7 @@ namespace AspNet.Security.OAuth.Salesforce
         {
             ClaimsIssuer = SalesforceAuthenticationDefaults.Issuer;
 
-            CallbackPath = new PathString(SalesforceAuthenticationDefaults.CallbackPath);
+            CallbackPath = SalesforceAuthenticationDefaults.CallbackPath;
 
             Environment = SalesforceAuthenticationDefaults.Environment;
 
@@ -30,8 +29,8 @@ namespace AspNet.Security.OAuth.Salesforce
             ClaimActions.MapJsonKey(ClaimTypes.Name, "username");
             ClaimActions.MapJsonKey(Claims.Email, "email");
             ClaimActions.MapJsonKey(Claims.UtcOffset, "utcOffset");
-            ClaimActions.MapCustomJson(Claims.RestUrl, user => user["urls"]?.Value<string>("rest"));
-            ClaimActions.MapCustomJson(Claims.ThumbnailPhoto, user => user["photos"]?.Value<string>("thumbnail"));
+            ClaimActions.MapJsonSubKey(Claims.RestUrl, "urls", "rest");
+            ClaimActions.MapJsonSubKey(Claims.ThumbnailPhoto, "photos", "thumbnail");
         }
 
         public SalesforceAuthenticationEnvironment Environment

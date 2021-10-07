@@ -8,7 +8,6 @@ using System;
 using System.Security.Claims;
 using System.Text;
 using System.Xml.Linq;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -33,9 +32,10 @@ namespace AspNet.Security.OAuth.Infrastructure
         /// <returns>
         /// The test application to use for the authentication provider.
         /// </returns>
-        public static WebApplicationFactory<Program> CreateApplication<TOptions>(OAuthTests<TOptions> tests, Action<IServiceCollection> configureServices = null)
+        public static WebApplicationFactory<Program> CreateApplication<TOptions>(OAuthTests<TOptions> tests, Action<IServiceCollection>? configureServices = null)
             where TOptions : OAuthOptions
         {
+#pragma warning disable CA2000
             return new TestApplicationFactory()
                 .WithWebHostBuilder(builder =>
                 {
@@ -46,6 +46,7 @@ namespace AspNet.Security.OAuth.Infrastructure
                         builder.ConfigureServices(configureServices);
                     }
                 });
+#pragma warning restore CA2000
         }
 
         private static void Configure<TOptions>(IWebHostBuilder builder, OAuthTests<TOptions> tests)
@@ -79,51 +80,60 @@ namespace AspNet.Security.OAuth.Infrastructure
                             .AddCookie("External", o => o.ForwardChallenge = tests.DefaultScheme);
 
                         tests.RegisterAuthentication(authentication);
+
+                        services.AddAuthorization();
                     });
         }
 
         private static void ConfigureApplication<TOptions>(IApplicationBuilder app, OAuthTests<TOptions> tests)
             where TOptions : OAuthOptions
         {
+            tests.ConfigureApplication(app);
+
             // Configure a single HTTP resource that challenges the client if unauthenticated
             // or returns the logged in user's claims as XML if the request is authenticated.
-            tests.ConfigureApplication(app);
-            app.UseAuthentication();
+            app.UseRouting();
 
-            app.Map("/me", childApp => childApp.Run(
-                async context =>
-                {
-                    if (context.User.Identity.IsAuthenticated)
-                    {
-                        string xml = IdentityToXmlString(context.User);
-                        byte[] buffer = Encoding.UTF8.GetBytes(xml.ToString());
+            app.UseAuthentication()
+               .UseAuthorization()
+               .UseEndpoints(endpoints =>
+               {
+                   endpoints.MapGet(
+                       "/me",
+                       async context =>
+                       {
+                           if (context.User.Identity?.IsAuthenticated == true)
+                           {
+                               string xml = IdentityToXmlString(context.User);
+                               byte[] buffer = Encoding.UTF8.GetBytes(xml);
 
-                        context.Response.StatusCode = 200;
-                        context.Response.ContentType = "text/xml";
+                               context.Response.StatusCode = 200;
+                               context.Response.ContentType = "text/xml";
 
-                        await context.Response.Body.WriteAsync(buffer, 0, buffer.Length);
-                    }
-                    else
-                    {
-                        await context.ChallengeAsync();
-                    }
-                }));
+                               await context.Response.Body.WriteAsync(buffer, context.RequestAborted);
+                           }
+                           else
+                           {
+                               await tests.ChallengeAsync(context);
+                           }
+                       });
+               });
         }
 
         private static string IdentityToXmlString(ClaimsPrincipal user)
         {
-            var element = new XElement("claims");
+            var element = new XElement("claims"!);
 
             foreach (var identity in user.Identities)
             {
                 foreach (var claim in identity.Claims)
                 {
                     var node = new XElement(
-                        "claim",
-                        new XAttribute("type", claim.Type),
-                        new XAttribute("value", claim.Value),
-                        new XAttribute("valueType", claim.ValueType),
-                        new XAttribute("issuer", claim.Issuer));
+                        "claim"!,
+                        new XAttribute("type"!, claim.Type),
+                        new XAttribute("value"!, claim.Value),
+                        new XAttribute("valueType"!, claim.ValueType),
+                        new XAttribute("issuer"!, claim.Issuer));
 
                     element.Add(node);
                 }

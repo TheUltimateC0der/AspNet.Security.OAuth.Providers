@@ -4,10 +4,12 @@
  * for more information concerning the license and the contributors participating to this project.
  */
 
+using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
+using static AspNet.Security.OAuth.Instagram.InstagramAuthenticationConstants;
 
 namespace AspNet.Security.OAuth.Instagram
 {
@@ -19,25 +21,27 @@ namespace AspNet.Security.OAuth.Instagram
         public InstagramAuthenticationOptions()
         {
             ClaimsIssuer = InstagramAuthenticationDefaults.Issuer;
-
-            CallbackPath = new PathString(InstagramAuthenticationDefaults.CallbackPath);
+            CallbackPath = InstagramAuthenticationDefaults.CallbackPath;
 
             AuthorizationEndpoint = InstagramAuthenticationDefaults.AuthorizationEndpoint;
             TokenEndpoint = InstagramAuthenticationDefaults.TokenEndpoint;
             UserInformationEndpoint = InstagramAuthenticationDefaults.UserInformationEndpoint;
 
-            Scope.Add("basic");
+            Scope.Add("user_profile");
 
             ClaimActions.MapJsonKey(ClaimTypes.NameIdentifier, "id");
-            ClaimActions.MapJsonKey(ClaimTypes.Name, "full_name");
+            ClaimActions.MapJsonKey(ClaimTypes.Name, "username");
+            ClaimActions.MapJsonKey(Claims.AccountType, "account_type");
+            ClaimActions.MapJsonKey(Claims.MediaCount, "media_count");
         }
 
         /// <summary>
-        /// Gets or sets a boolean indicating whether the userinfo requests
-        /// should be signed before being sent to the Instagram API.
-        /// Enabling this option is recommended when the client application
-        /// has been configured to enforce signed requests.
+        /// Gets the list of list of fields and edges to retrieve from the user information endpoint.
         /// </summary>
-        public bool UseSignedRequests { get; set; }
+        public ISet<string> Fields { get; } = new HashSet<string>()
+        {
+            "id",
+            "username",
+        };
     }
 }

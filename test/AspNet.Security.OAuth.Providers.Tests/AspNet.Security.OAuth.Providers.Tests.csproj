@@ -1,27 +1,42 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\..\build\packages.props" />
+
   <PropertyGroup>
-    <AspNetCoreVersion>2.2.0</AspNetCoreVersion>
     <RootNamespace>AspNet.Security.OAuth</RootNamespace>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <TargetFrameworks>$(DefaultNetCoreTargetFramework)</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);CA1707;CA2227</NoWarn>
   </PropertyGroup>
+
   <ItemGroup>
     <Content Include="xunit.runner.json;**\bundle.json" Exclude="bin\**\bundle.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Apple\test.p8;Apple\test.pfx" CopyToOutputDirectory="PreserveNewest" />
+    <None Remove="**\bundle.json" />
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\AspNet.Security.OAuth.*\*.csproj" />
   </ItemGroup>
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.App" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="JustEat.HttpClientInterception" Version="$(JustEatHttpClientInterceptionVersion)" />
-    <PackageReference Include="MartinCostello.Logging.XUnit" Version="$(MartinCostelloLoggingXUnitVersion)" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(DotNetTestSdkVersion)" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="$(AspNetCoreVersion)" />
-    <PackageReference Include="Shouldly" Version="$(ShouldlyVersion)" />
-    <PackageReference Include="xunit" Version="$(XunitVersion)" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="$(XunitVersion)" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" PrivateAssets="All" />
+    <PackageReference Include="JustEat.HttpClientInterception" />
+    <PackageReference Include="MartinCostello.Logging.XUnit" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SolutionRoot</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

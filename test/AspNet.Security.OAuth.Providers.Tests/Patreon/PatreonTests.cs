@@ -28,21 +28,23 @@ namespace AspNet.Security.OAuth.Patreon
         }
 
         [Theory]
-        [InlineData(ClaimTypes.NameIdentifier, "my-id")]
+        [InlineData(ClaimTypes.Email, "john.smith@patreon.local")]
+        [InlineData(ClaimTypes.NameIdentifier, "12345")]
+        [InlineData(ClaimTypes.GivenName, "John")]
         [InlineData(ClaimTypes.Name, "John Smith")]
+        [InlineData(ClaimTypes.Surname, "Smith")]
         [InlineData(ClaimTypes.Webpage, "https://patreon.local/JohnSmith")]
         [InlineData("urn:patreon:avatar", "https://patreon.local/JohnSmith/avatar.png")]
         public async Task Can_Sign_In_Using_Patreon(string claimType, string claimValue)
         {
             // Arrange
-            using (var server = CreateTestServer())
-            {
-                // Act
-                var claims = await AuthenticateUserAsync(server);
+            using var server = CreateTestServer();
 
-                // Assert
-                AssertClaim(claims, claimType, claimValue);
-            }
+            // Act
+            var claims = await AuthenticateUserAsync(server);
+
+            // Assert
+            AssertClaim(claims, claimType, claimValue);
         }
     }
 }

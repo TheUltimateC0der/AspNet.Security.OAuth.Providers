@@ -7,7 +7,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
 using static AspNet.Security.OAuth.GitHub.GitHubAuthenticationConstants;
 
 namespace AspNet.Security.OAuth.GitHub
@@ -20,8 +19,7 @@ namespace AspNet.Security.OAuth.GitHub
         public GitHubAuthenticationOptions()
         {
             ClaimsIssuer = GitHubAuthenticationDefaults.Issuer;
-
-            CallbackPath = new PathString(GitHubAuthenticationDefaults.CallbackPath);
+            CallbackPath = GitHubAuthenticationDefaults.CallbackPath;
 
             AuthorizationEndpoint = GitHubAuthenticationDefaults.AuthorizationEndpoint;
             TokenEndpoint = GitHubAuthenticationDefaults.TokenEndpoint;
@@ -33,6 +31,11 @@ namespace AspNet.Security.OAuth.GitHub
             ClaimActions.MapJsonKey(Claims.Name, "name");
             ClaimActions.MapJsonKey(Claims.Url, "url");
         }
+
+        /// <summary>
+        /// Gets or sets the domain name to use if using a GitHub Enterprise on-premises deployment.
+        /// </summary>
+        public string? EnterpriseDomain { get; set; }
 
         /// <summary>
         /// Gets or sets the address of the endpoint exposing

@@ -9,7 +9,6 @@ using System.Net.Http;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
 using static AspNet.Security.OAuth.StackExchange.StackExchangeAuthenticationConstants;
 
 namespace AspNet.Security.OAuth.StackExchange
@@ -23,24 +22,24 @@ namespace AspNet.Security.OAuth.StackExchange
         {
             ClaimsIssuer = StackExchangeAuthenticationDefaults.Issuer;
 
-            CallbackPath = new PathString(StackExchangeAuthenticationDefaults.CallbackPath);
+            CallbackPath = StackExchangeAuthenticationDefaults.CallbackPath;
 
             AuthorizationEndpoint = StackExchangeAuthenticationDefaults.AuthorizationEndpoint;
             TokenEndpoint = StackExchangeAuthenticationDefaults.TokenEndpoint;
             UserInformationEndpoint = StackExchangeAuthenticationDefaults.UserInformationEndpoint;
             BackchannelHttpHandler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip };
 
-            ClaimActions.MapCustomJson(ClaimTypes.NameIdentifier, user => user.Value<string>("account_id"));
-            ClaimActions.MapCustomJson(ClaimTypes.Name, user => user.Value<string>("display_name"));
-            ClaimActions.MapCustomJson(ClaimTypes.Webpage, user => user.Value<string>("website_url"));
-            ClaimActions.MapCustomJson(Claims.Link, user => user.Value<string>("link"));
+            ClaimActions.MapJsonKey(ClaimTypes.NameIdentifier, "account_id");
+            ClaimActions.MapJsonKey(ClaimTypes.Name, "display_name");
+            ClaimActions.MapJsonKey(ClaimTypes.Webpage, "website_url");
+            ClaimActions.MapJsonKey(Claims.Link, "link");
         }
 
         /// <summary>
         /// Gets or sets the application request key, obtained
         /// when registering your application with StackApps.
         /// </summary>
-        public string RequestKey { get; set; }
+        public string RequestKey { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the site on which the user is registered.

@@ -8,6 +8,8 @@ using System;
 using AspNet.Security.OAuth.GitHub;
 using JetBrains.Annotations;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.DependencyInjection
 {
@@ -50,7 +52,8 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <param name="configuration">The delegate used to configure the GitHub options.</param>
         /// <returns>The <see cref="AuthenticationBuilder"/>.</returns>
         public static AuthenticationBuilder AddGitHub(
-            [NotNull] this AuthenticationBuilder builder, [NotNull] string scheme,
+            [NotNull] this AuthenticationBuilder builder,
+            [NotNull] string scheme,
             [NotNull] Action<GitHubAuthenticationOptions> configuration)
         {
             return builder.AddGitHub(scheme, GitHubAuthenticationDefaults.DisplayName, configuration);
@@ -67,9 +70,11 @@ namespace Microsoft.Extensions.DependencyInjection
         /// <returns>The <see cref="AuthenticationBuilder"/>.</returns>
         public static AuthenticationBuilder AddGitHub(
             [NotNull] this AuthenticationBuilder builder,
-            [NotNull] string scheme, [CanBeNull] string caption,
+            [NotNull] string scheme,
+            [CanBeNull] string caption,
             [NotNull] Action<GitHubAuthenticationOptions> configuration)
         {
+            builder.Services.TryAddSingleton<IPostConfigureOptions<GitHubAuthenticationOptions>, GitHubPostConfigureOptions>();
             return builder.AddOAuth<GitHubAuthenticationOptions, GitHubAuthenticationHandler>(scheme, caption, configuration);
         }
     }

@@ -38,8 +38,9 @@ namespace Mvc.Client.Controllers
             return Challenge(new AuthenticationProperties { RedirectUri = "/" }, provider);
         }
 
-        [HttpGet("~/signout"), HttpPost("~/signout")]
-        public IActionResult SignOut()
+        [HttpGet("~/signout")]
+        [HttpPost("~/signout")]
+        public IActionResult SignOutCurrentUser()
         {
             // Instruct the cookies middleware to delete the local cookie created
             // when the user agent is redirected from the external identity provider

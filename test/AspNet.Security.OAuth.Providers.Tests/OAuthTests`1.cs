@@ -13,15 +13,19 @@ using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using AspNet.Security.OAuth.Apple;
 using AspNet.Security.OAuth.Infrastructure;
 using JustEat.HttpClientInterception;
 using MartinCostello.Logging.XUnit;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace AspNet.Security.OAuth
@@ -37,13 +41,20 @@ namespace AspNet.Security.OAuth
         {
             Interceptor = new HttpClientInterceptorOptions()
                 .ThrowsOnMissingRegistration()
-                .RegisterBundle(Path.Combine(GetType().Name.Replace("Tests", string.Empty), "bundle.json"));
+                .RegisterBundle(Path.Combine(BundleName, "bundle.json"));
+
+            LoopbackRedirectHandler = new LoopbackRedirectHandler
+            {
+                RedirectMethod = RedirectMethod,
+                RedirectParameters = RedirectParameters,
+                RedirectUri = RedirectUri,
+            };
         }
 
         /// <summary>
         /// Gets or sets the xunit test output helper to route application logs to.
         /// </summary>
-        public ITestOutputHelper OutputHelper { get; set; }
+        public ITestOutputHelper? OutputHelper { get; set; }
 
         /// <summary>
         /// Gets the interceptor to use for configuring stubbed HTTP responses.
@@ -56,9 +67,24 @@ namespace AspNet.Security.OAuth
         public abstract string DefaultScheme { get; }
 
         /// <summary>
+        /// Gets the HTTP bundle name to use for the test.
+        /// </summary>
+        protected virtual string BundleName => GetType().Name.Replace("Tests", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Gets the optional redirect HTTP method to use for OAuth flows.
+        /// </summary>
+        protected virtual HttpMethod RedirectMethod => HttpMethod.Get;
+
+        /// <summary>
+        /// Gets the optional additional parameters for the redirect request with OAuth flows.
+        /// </summary>
+        protected virtual IDictionary<string, string> RedirectParameters => new Dictionary<string, string>();
+
+        /// <summary>
         /// Gets the optional redirect URI to use for OAuth flows.
         /// </summary>
-        protected virtual string RedirectUri { get; }
+        protected virtual string? RedirectUri { get; }
 
         /// <summary>
         /// Registers authentication for the test.
@@ -72,7 +98,9 @@ namespace AspNet.Security.OAuth
         /// localization scenario.
         /// </summary>
         /// <param name="app">The application.</param>
-        protected internal virtual void ConfigureApplication(IApplicationBuilder app) { }
+        protected internal virtual void ConfigureApplication(IApplicationBuilder app)
+        {
+        }
 
         /// <summary>
         /// Configures the default authentication options.
@@ -93,7 +121,7 @@ namespace AspNet.Security.OAuth
         /// <returns>
         /// The test application to use for authentication.
         /// </returns>
-        protected WebApplicationFactory<Program> CreateTestServer(Action<IServiceCollection> configureServices = null)
+        protected WebApplicationFactory<Program> CreateTestServer(Action<IServiceCollection>? configureServices = null)
             => ApplicationFactory.CreateApplication(this, configureServices);
 
         /// <summary>
@@ -105,6 +133,100 @@ namespace AspNet.Security.OAuth
         /// </returns>
         protected HttpClient CreateBackchannel(AuthenticationBuilder builder)
             => builder.Services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient();
+
+        public LoopbackRedirectHandler LoopbackRedirectHandler { get; set; }
+
+        [Fact]
+        public async Task OnCreatingTicket_Is_Raised_By_Handler()
+        {
+            // Arrange
+            bool onCreatingTicketEventRaised = false;
+
+            void ConfigureServices(IServiceCollection services)
+            {
+                services.PostConfigureAll<TOptions>((options) =>
+                {
+                    options.Events.OnCreatingTicket = (context) =>
+                    {
+                        onCreatingTicketEventRaised = true;
+                        return Task.CompletedTask;
+                    };
+
+                    if (options is AppleAuthenticationOptions appleOptions)
+                    {
+                        appleOptions.JwtSecurityTokenHandler = new FrozenJwtSecurityTokenHandler();
+                    }
+                });
+            }
+
+            using var server = CreateTestServer(ConfigureServices);
+
+            // Act
+            var claims = await AuthenticateUserAsync(server);
+
+            // Assert
+            onCreatingTicketEventRaised.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task OnCreatingTicket_Is_Raised_By_Handler_Using_Custom_Events_Type()
+        {
+            // Arrange
+            bool onCreatingTicketEventRaised = false;
+
+            void ConfigureServices(IServiceCollection services)
+            {
+                services.TryAddScoped((_) =>
+                {
+                    return new CustomOAuthEvents()
+                    {
+                        OnCreatingTicket = (context) =>
+                        {
+                            onCreatingTicketEventRaised = true;
+                            return Task.CompletedTask;
+                        }
+                    };
+                });
+                services.TryAddScoped((_) =>
+                {
+                    return new CustomAppleAuthenticationEvents()
+                    {
+                        OnCreatingTicket = (context) =>
+                        {
+                            onCreatingTicketEventRaised = true;
+                            return Task.CompletedTask;
+                        }
+                    };
+                });
+
+                services.PostConfigureAll<TOptions>((options) =>
+                {
+                    if (options is AppleAuthenticationOptions appleOptions)
+                    {
+                        appleOptions.EventsType = typeof(CustomAppleAuthenticationEvents);
+                        appleOptions.JwtSecurityTokenHandler = new FrozenJwtSecurityTokenHandler();
+                    }
+                    else
+                    {
+                        options.EventsType = typeof(CustomOAuthEvents);
+                    }
+                });
+            }
+
+            using var server = CreateTestServer(ConfigureServices);
+
+            // Act
+            var claims = await AuthenticateUserAsync(server);
+
+            // Assert
+            onCreatingTicketEventRaised.ShouldBeTrue();
+        }
+
+        /// <summary>
+        /// Run the ChannelAsync for authentication
+        /// </summary>
+        /// <param name="context">The HTTP context</param>
+        protected internal virtual Task ChallengeAsync(HttpContext context) => context.ChallengeAsync();
 
         /// <summary>
         /// Asynchronously authenticates the user and returns the claims associated with the authenticated user.
@@ -119,16 +241,15 @@ namespace AspNet.Security.OAuth
 
             // Arrange - Force a request chain that challenges the request to the authentication
             // handler and returns an authentication cookie to log the user in to the application.
-            using (var client = server.CreateDefaultClient(new LoopbackRedirectHandler() { RedirectUri = RedirectUri }))
+            using (var client = server.CreateDefaultClient(LoopbackRedirectHandler))
             {
                 // Act
-                using (var result = await client.GetAsync("/me"))
-                {
-                    // Assert
-                    result.StatusCode.ShouldBe(HttpStatusCode.Found);
+                using var result = await client.GetAsync("/me");
 
-                    cookies = result.Headers.GetValues("Set-Cookie");
-                }
+                // Assert
+                result.StatusCode.ShouldBe(HttpStatusCode.Found);
+
+                cookies = result.Headers.GetValues("Set-Cookie");
             }
 
             XElement element;
@@ -139,19 +260,19 @@ namespace AspNet.Security.OAuth
                 client.DefaultRequestHeaders.Add("Cookie", cookies);
 
                 // Act
-                using (var result = await client.GetAsync("/me"))
-                {
-                    // Assert
-                    result.StatusCode.ShouldBe(HttpStatusCode.OK);
-                    result.Content.Headers.ContentType.MediaType.ShouldBe("text/xml");
+                using var result = await client.GetAsync("/me");
 
-                    string xml = await result.Content.ReadAsStringAsync();
+                // Assert
+                result.StatusCode.ShouldBe(HttpStatusCode.OK);
+                result.Content.Headers.ContentType.ShouldNotBeNull();
+                result.Content.Headers.ContentType!.MediaType.ShouldBe("text/xml");
 
-                    element = XElement.Parse(xml);
-                }
+                string xml = await result.Content.ReadAsStringAsync();
+
+                element = XElement.Parse(xml);
             }
 
-            element.Name.ShouldBe("claims");
+            element.Name!.ShouldBe("claims"!);
             element.Elements("claim").Count().ShouldBeGreaterThanOrEqualTo(1);
 
             var claims = new List<Claim>();
@@ -160,10 +281,10 @@ namespace AspNet.Security.OAuth
             {
                 claims.Add(
                     new Claim(
-                        claim.Attribute("type").Value,
-                        claim.Attribute("value").Value,
-                        claim.Attribute("valueType").Value,
-                        claim.Attribute("issuer").Value));
+                        claim.Attribute("type"!) !.Value,
+                        claim.Attribute("value"!) !.Value,
+                        claim.Attribute("valueType"!) !.Value,
+                        claim.Attribute("issuer"!) !.Value));
             }
 
             return claims.ToDictionary((key) => key.Type, (value) => value);
@@ -186,6 +307,14 @@ namespace AspNet.Security.OAuth
             {
                 actualValue.ShouldBe(claimValue);
             }
+        }
+
+        private sealed class CustomOAuthEvents : OAuthEvents
+        {
+        }
+
+        private sealed class CustomAppleAuthenticationEvents : AppleAuthenticationEvents
+        {
         }
     }
 }

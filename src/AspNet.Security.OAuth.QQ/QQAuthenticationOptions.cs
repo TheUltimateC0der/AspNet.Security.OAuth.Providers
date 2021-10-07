@@ -7,7 +7,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
 using static AspNet.Security.OAuth.QQ.QQAuthenticationConstants;
 
 namespace AspNet.Security.OAuth.QQ
@@ -20,7 +19,7 @@ namespace AspNet.Security.OAuth.QQ
         public QQAuthenticationOptions()
         {
             ClaimsIssuer = QQAuthenticationDefaults.Issuer;
-            CallbackPath = new PathString(QQAuthenticationDefaults.CallbackPath);
+            CallbackPath = QQAuthenticationDefaults.CallbackPath;
 
             AuthorizationEndpoint = QQAuthenticationDefaults.AuthorizationEndpoint;
             TokenEndpoint = QQAuthenticationDefaults.TokenEndpoint;
@@ -39,7 +38,12 @@ namespace AspNet.Security.OAuth.QQ
         }
 
         /// <summary>
-        /// Gets or sets the URL of the user identification endpoint (aka "OpenID endpoint").
+        /// Gets or sets if the union Id (the primary key of an owner for different apps of the QQ platform) should be put into the user claims.
+        /// </summary>
+        public bool ApplyForUnionId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the URL of the user identification endpoint (a.k.a. the "OpenID endpoint").
         /// </summary>
         public string UserIdentificationEndpoint { get; set; }
     }

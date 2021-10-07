@@ -4,11 +4,10 @@
  * for more information concerning the license and the contributors participating to this project.
  */
 
+using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.AspNetCore.Http;
-using Newtonsoft.Json.Linq;
 
 namespace AspNet.Security.OAuth.Yandex
 {
@@ -20,7 +19,7 @@ namespace AspNet.Security.OAuth.Yandex
         public YandexAuthenticationOptions()
         {
             ClaimsIssuer = YandexAuthenticationDefaults.Issuer;
-            CallbackPath = new PathString(YandexAuthenticationDefaults.CallbackPath);
+            CallbackPath = YandexAuthenticationDefaults.CallbackPath;
 
             AuthorizationEndpoint = YandexAuthenticationDefaults.AuthorizationEndpoint;
             TokenEndpoint = YandexAuthenticationDefaults.TokenEndpoint;
@@ -30,7 +29,18 @@ namespace AspNet.Security.OAuth.Yandex
             ClaimActions.MapJsonKey(ClaimTypes.Name, "login");
             ClaimActions.MapJsonKey(ClaimTypes.Surname, "last_name");
             ClaimActions.MapJsonKey(ClaimTypes.GivenName, "first_name");
-            ClaimActions.MapCustomJson(ClaimTypes.Email, user => user.Value<JArray>("emails")?.First?.Value<string>());
+
+            ClaimActions.MapCustomJson(
+                ClaimTypes.Email,
+                user =>
+                {
+                    if (user.TryGetProperty("emails", out var emails))
+                    {
+                        return emails.EnumerateArray().Select((p) => p.GetString()).FirstOrDefault();
+                    }
+
+                    return null;
+                });
         }
     }
 }
